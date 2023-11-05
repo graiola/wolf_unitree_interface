@@ -38,18 +38,25 @@ int64_t utime_now() {
 
 UnitreeRobotHw::UnitreeRobotHw()
 {
-
-    // FIXME add robot model
-    //robot_name_ = "unitree";
 }
 
 UnitreeRobotHw::~UnitreeRobotHw()
 {
-
 }
 
 void UnitreeRobotHw::init()
 {
+
+    ros::NodeHandle nh;
+    std::string robot_model;
+    // Create Unitree HAL interfaces
+    if(!nh.getParam("robot_model",robot_model))
+    {
+        ROS_ERROR_NAMED(CLASS_NAME,"[UnitreeRobotHw] robot_model not available in the ROS param server!");
+        return;
+    }
+    unitree_lowinterface_.reset(new unitreehal::LowLevelInterface(robot_model));
+    unitree_highinterface_.reset(new unitreehal::HighLevelInterface(robot_model));
 
     // Hardware interfaces: Joints
     auto joint_names = loadJointNamesFromSRDF();
@@ -61,7 +68,7 @@ void UnitreeRobotHw::init()
     }
     else
     {
-      ROS_ERROR_NAMED(CLASS_NAME,"Failed to register joint interface.");
+      ROS_ERROR_NAMED(CLASS_NAME,"[UnitreeRobotHw] Failed to register joint interface.");
       return;
     }
 
@@ -74,7 +81,7 @@ void UnitreeRobotHw::init()
     }
     else
     {
-      ROS_ERROR_NAMED(CLASS_NAME,"Failed to register imu interface.");
+      ROS_ERROR_NAMED(CLASS_NAME,"[UnitreeRobotHw] Failed to register imu interface.");
       return;
     }
 
@@ -87,7 +94,7 @@ void UnitreeRobotHw::init()
     }
     else
     {
-      ROS_WARN_NAMED(CLASS_NAME,"Failed to register ground truth interface.");
+      ROS_WARN_NAMED(CLASS_NAME,"[UnitreeRobotHw] Failed to register ground truth interface.");
     }
 
     // Hardware interfaces: Contact sensors
@@ -99,22 +106,20 @@ void UnitreeRobotHw::init()
     }
     else
     {
-      ROS_WARN_NAMED(CLASS_NAME,"Failed to register contacts interface.");
+      ROS_WARN_NAMED(CLASS_NAME,"[UnitreeRobotHw] Failed to register contacts interface.");
     }
 
-    unitree_interface_.InitCmdData(unitree_lowcmd_);
+    unitree_lowinterface_->InitCmdData(unitree_lowcmd_);
     startup_routine();
 
-    ros::NodeHandle nh;
     odom_pub_.reset(new realtime_tools::RealtimePublisher<nav_msgs::Odometry>(nh,	"odometry/robot", 1));
-
-
 }
 
 void UnitreeRobotHw::read()
 {
     // Get robot data
-    unitree_lowstate_ = unitree_interface_.ReceiveObservation();
+    unitree_lowstate_  = unitree_lowinterface_->ReceiveObservation();
+    unitree_highstate_ = unitree_highinterface_->ReceiveObservation();
 
     // ------
     // Joints
@@ -145,7 +150,15 @@ void UnitreeRobotHw::read()
     // ---
     // GT
     // ---
-    // TODO
+    base_lin_pos_[0]  = unitree_highstate_.position[0];
+    base_lin_pos_[1]  = unitree_highstate_.position[1];
+    base_lin_pos_[2]  = unitree_highstate_.position[2];
+    base_lin_vel_[0]  = unitree_highstate_.velocity[0];
+    base_lin_vel_[1]  = unitree_highstate_.velocity[1];
+    base_lin_vel_[2]  = unitree_highstate_.velocity[2];
+    base_orientation_ = imu_orientation_;
+    base_ang_vel_     = imu_ang_vel_;
+    base_lin_acc_     = imu_lin_acc_;
 
     // ---
     // Contacts 
@@ -156,10 +169,16 @@ void UnitreeRobotHw::read()
     // Publish the IMU data NOTE: missing covariances
     if(odom_pub_.get() && odom_pub_->trylock())
     {
+      odom_pub_->msg_.pose.pose.position.x     = base_lin_pos_[0];
+      odom_pub_->msg_.pose.pose.position.y     = base_lin_pos_[1];
+      odom_pub_->msg_.pose.pose.position.z     = base_lin_pos_[2];
       odom_pub_->msg_.pose.pose.orientation.w  = imu_orientation_[0];
       odom_pub_->msg_.pose.pose.orientation.x  = imu_orientation_[1];
       odom_pub_->msg_.pose.pose.orientation.y  = imu_orientation_[2];
       odom_pub_->msg_.pose.pose.orientation.z  = imu_orientation_[3];
+      odom_pub_->msg_.twist.twist.linear.x     = base_lin_vel_[0];
+      odom_pub_->msg_.twist.twist.linear.y     = base_lin_vel_[1];
+      odom_pub_->msg_.twist.twist.linear.z     = base_lin_vel_[2];
       odom_pub_->msg_.twist.twist.angular.x    = imu_ang_vel_[0];
       odom_pub_->msg_.twist.twist.angular.y    = imu_ang_vel_[1];
       odom_pub_->msg_.twist.twist.angular.z    = imu_ang_vel_[2];
@@ -174,14 +193,14 @@ void UnitreeRobotHw::write()
     for (unsigned int jj = 0; jj < n_dof_; ++jj)
       unitree_lowcmd_.motorCmd[unitree_motor_idxs_[jj]].tau = static_cast<float>(joint_effort_command_[jj]  );
 
-    unitree_interface_.SendLowCmd(unitree_lowcmd_);
+    unitree_lowinterface_->SendLowCmd(unitree_lowcmd_);
 }
 
 void UnitreeRobotHw::send_zero_command()
 {
     std::array<float, 60> zero_command = {0};
     // unitree_interface_->SendCommand(zero_command);
-    unitree_interface_.SendCommand(zero_command);
+    unitree_lowinterface_->SendCommand(zero_command);
 }
 
 void UnitreeRobotHw::startup_routine()

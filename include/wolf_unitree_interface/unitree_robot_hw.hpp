@@ -53,7 +53,8 @@ private:
           }};
 
   /** @brief Unitree-HAL */
-  unitreehal::LowLevelInterface unitree_interface_;
+  std::shared_ptr<unitreehal::HighLevelInterface> unitree_highinterface_;
+  std::shared_ptr<unitreehal::LowLevelInterface>  unitree_lowinterface_;
   unitreehal::HighState unitree_highstate_ = {0};
   unitreehal::LowState unitree_lowstate_ = {0};
   unitreehal::LowCmd unitree_lowcmd_ = {0};

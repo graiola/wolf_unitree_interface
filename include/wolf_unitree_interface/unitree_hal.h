@@ -32,11 +32,10 @@ namespace unitreehal
 
 inline namespace unitree { using namespace ::unitree; }
 
-
 class LowLevelInterface
 {
 public:
-  LowLevelInterface();
+  LowLevelInterface(const std::string& model);
 
   LowState ReceiveObservation();
 
@@ -56,7 +55,7 @@ public:
 class HighLevelInterface
 {
 public:
-  HighLevelInterface();
+  HighLevelInterface(const std::string& model);
 
   HighState ReceiveObservation();
 

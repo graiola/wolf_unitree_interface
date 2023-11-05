@@ -7,10 +7,21 @@
 namespace unitreehal
 {
 
+unitree::LeggedType modelToType(const std::string& model)
+{
+    if(model == "go1")
+        return unitree::LeggedType::Go1;
+    else if (model == "aliengo")
+        return unitree::LeggedType::Aliengo;
+    else
+        throw std::runtime_error("Wrong robot model!");
+}
+
+
 // ---------
 // Low-Level
 // ---------
-LowLevelInterface::LowLevelInterface(): safe_(unitree::LeggedType::Aliengo), udp_(unitree::LOWLEVEL)
+LowLevelInterface::LowLevelInterface(const std::string& model): safe_(modelToType(model)), udp_(unitree::LOWLEVEL)
 {
     udp_.InitCmdData(lowcmd_);
 
@@ -83,7 +94,7 @@ void LowLevelInterface::SendCommand(std::array<float, 60> motorcmd)
 // ----------
 // High-Level
 // ----------
-HighLevelInterface::HighLevelInterface(): safe_(unitree::LeggedType::Aliengo), udp_(unitree::HIGHLEVEL)
+HighLevelInterface::HighLevelInterface(const std::string& model): safe_(modelToType(model)), udp_(unitree::HIGHLEVEL)
 {
 }
 
